@@ -1,0 +1,371 @@
+<report xmlns="http://developer.cognos.com/schemas/report/8.0/" useStyleVersion="10" expressionLocale="en">
+				<modelPath>/content/package[@name='Infor10EAMPackage_1012']/model[@name='model']</modelPath>
+				<drillBehavior modelBasedDrillThru="true"/>
+				<queries>
+					
+				<query name="Lazy List">
+						<source>
+							
+						<sqlQuery name="SQL1" dataSource="AdvRepData">
+			<sqlText>SELECT LAZY.PER_CODE, PER_UDFCHAR01, PER_TRADE
+FROM
+
+
+
+(SELECT PER_CODE
+FROM
+
+
+(SELECT PER_CODE, PER_UDFCHAR01, PER_NOTUSED
+FROM R5PERSONNEL
+WHERE (PER_UDFCHAR01 IN (#PROMPTMANY('pmd')#) OR PER_UDFCHAR01 = #PROMPT('DEPT')# OR (#PROMPT('DEPT')# = '*' AND PER_UDFCHAR01 IS NOT NULL)) 
+AND PER_NOTUSED = '-'
+)
+
+
+MINUS
+SELECT BOO_PERSON
+FROM
+
+
+(SELECT BOO_PERSON, BOO_DATE
+FROM R5BOOKEDHOURS
+WHERE 
+TRUNC(BOO_DATE) BETWEEN trunc(to_date(#prompt('Start Date')#, 'YYYY-MM-DD')) and trunc(to_date(#prompt('End Date')#, 'YYYY-MM-DD')))) "LAZY"
+
+
+INNER JOIN R5PERSONNEL ON LAZY.PER_CODE = R5PERSONNEL.PER_CODE</sqlText>
+		<mdProjectedItems><mdProjectedItem name="PER_CODE"/><mdProjectedItem name="PER_UDFCHAR01"/><mdProjectedItem name="PER_TRADE"/></mdProjectedItems></sqlQuery></source>
+						<selection><dataItem name="PER_CODE"><expression>[SQL1].[PER_CODE]</expression></dataItem><dataItem name="Employee"><expression>REPGETDESC('EN', 'PERS', [PER_CODE], NULL, NULL)</expression></dataItem><dataItem name="PER_UDFCHAR01" label="PMD"><expression>[SQL1].[PER_UDFCHAR01]</expression></dataItem><dataItem name="PER_TRADE"><expression>[SQL1].[PER_TRADE]</expression></dataItem></selection>
+					</query><query name="PMD LOV">
+			<source>
+				
+			<sqlQuery name="SQL2" dataSource="AdvRepData">
+			<sqlText>SELECT CASE #prompt('DEPT')#
+WHEN 'PK-MAINT' THEN
+	obj_code
+WHEN '*' THEN
+	'All PMDs'
+ELSE
+	'None'
+END
+	as obj_code FROM r5objects
+	WHERE (obj_code LIKE 'PMD _' AND #prompt('DEPT')# in ('PK-MAINT', '*'))
+	OR (#prompt('DEPT')# NOT in ('PK-MAINT', '*'))
+	</sqlText>
+		<mdProjectedItems><mdProjectedItem name="OBJ_CODE"/></mdProjectedItems></sqlQuery></source>
+			<selection><dataItem name="OBJ_CODE"><expression>[SQL2].[OBJ_CODE]</expression></dataItem></selection>
+		</query><query name="UDF CrossTab"><source><sqlQuery name="SQL3" dataSource="AdvRepData">
+			<sqlText>SELECT row_number() over ( order by boo_event ) as BNum, EVT_CODE, EVT_TYPE,  BOO_DATE, BOO_HOURS, BOO_EVENT,  BOO_PERSON, BOO_MRC, PER_CODE, PER_UDFCHAR01, PER_NOTUSED, PER_TRADE
+
+
+FROM R5PERSONNEL
+join R5BOOKEDHOURS on BOO_PERSON = PER_CODE
+join R5EVENTS on EVT_CODE = BOO_EVENT
+
+where  EVT_TYPE IN ('JOB','PPM')
+AND EVT_PRIORITY &lt;&gt; '*'
+AND (PER_UDFCHAR01 IN (#PROMPTMANY('pmd')#) OR PER_UDFCHAR01 = #PROMPT('DEPT')# OR (#PROMPT('DEPT')# = '*' AND PER_UDFCHAR01 IS NOT NULL)) </sqlText>
+		<mdProjectedItems><mdProjectedItem name="BNUM"/><mdProjectedItem name="EVT_CODE"/><mdProjectedItem name="EVT_TYPE"/><mdProjectedItem name="BOO_DATE"/><mdProjectedItem name="BOO_HOURS"/><mdProjectedItem name="BOO_EVENT"/><mdProjectedItem name="BOO_PERSON"/><mdProjectedItem name="BOO_MRC"/><mdProjectedItem name="PER_CODE"/><mdProjectedItem name="PER_UDFCHAR01"/><mdProjectedItem name="PER_NOTUSED"/><mdProjectedItem name="PER_TRADE"/></mdProjectedItems></sqlQuery></source><selection><dataItem name="BOO_DATE"><expression>[SQL3].[BOO_DATE]</expression></dataItem><dataItem name="Hours Worked" aggregate="total"><expression>[SQL3].[BOO_HOURS]</expression></dataItem><dataItem name="BOO_PERSON"><expression>[SQL3].[BOO_PERSON]</expression></dataItem><dataItem name="Person"><expression>REPGETDESC ('EN', 'PERS', [BOO_PERSON], NULL, NULL)</expression></dataItem><dataItem name="Date"><expression>to_char([BOO_DATE], 'Day MM/DD')</expression></dataItem><dataItemEdgeSummary solveOrder="1" refDataItem="Date" aggregateMethod="total" name="Total(Date)" label="Total"/><dataItem name="PER_NOTUSED"><expression>[SQL3].[PER_NOTUSED]</expression></dataItem><dataItem name="PER_UDFCHAR01"><expression>[SQL3].[PER_UDFCHAR01]</expression></dataItem><dataItem name="BNUM"><expression>[SQL3].[BNUM]</expression></dataItem><dataItem name="PER_TRADE"><expression>[SQL3].[PER_TRADE]</expression></dataItem></selection><detailFilters><detailFilter><filterExpression>TRUNC([BOO_DATE]) BETWEEN  trunc(to_date(#prompt('Start Date')#, 'YYYY-MM-DD')) AND trunc(to_date(#prompt('End Date')#, 'YYYY-MM-DD'))</filterExpression></detailFilter></detailFilters></query><query name="Full-Time Hours"><source><sqlQuery name="SQL4" dataSource="AdvRepData">
+			<sqlText>SELECT PER_CODE, PER_TRADE, BOO_DATE, BOO_HOURS, PER_TERMINATEDDATE, row_number() over ( order by boo_event ) as BNum
+
+FROM R5BOOKEDHOURS
+join R5EVENTS on boo_event = evt_code
+FULL OUTER join R5PERSONNEL on PER_CODE = BOO_PERSON
+
+where (PER_UDFCHAR01 IN (#PROMPTMANY('pmd')#) OR PER_UDFCHAR01 = #PROMPT('DEPT')# OR (#PROMPT('DEPT')# = '*' AND PER_UDFCHAR01 IS NOT NULL)) 
+AND PER_NOTUSED = '-'
+AND EVT_PRIORITY &lt;&gt; '*'
+
+UNION
+
+SELECT PER_CODE, PER_TRADE, NULL, NULL, PER_TERMINATEDDATE, NULL
+FROM R5PERSONNEL
+WHERE (PER_UDFCHAR01 IN (#PROMPTMANY('pmd')#) OR PER_UDFCHAR01 = #PROMPT('DEPT')# OR (#PROMPT('DEPT')# = '*' AND PER_UDFCHAR01 IS NOT NULL))
+AND PER_NOTUSED = '-'</sqlText>
+		<mdProjectedItems><mdProjectedItem name="PER_CODE"/><mdProjectedItem name="PER_TRADE"/><mdProjectedItem name="BOO_DATE"/><mdProjectedItem name="BOO_HOURS"/><mdProjectedItem name="PER_TERMINATEDDATE"/><mdProjectedItem name="BNUM"/></mdProjectedItems></sqlQuery></source><selection><dataItem name="Date Num"><expression>((cast(_days_between(?End Date?,1900-01-01)/7,integer)*5)+if(_day_of_week(?End Date?,1)&gt;5) then (4) else (mod(_days_between(?End Date?,1900-01-01),7))+1)
+-
+((cast(_days_between(?Start Date?,1900-01-01)/7,integer)*5)+if(_day_of_week(?Start Date?,1)&gt;5) then (4) else (mod(_days_between(?Start Date?,1900-01-01),7))+1)
++
+(if(_day_of_week(?Start Date?,1)&lt;6) then (1) else (0))</expression></dataItem><dataItem name="Date"><expression>to_char([SQL4].[BOO_DATE],'Day MM/DD')</expression></dataItem><dataItem name="Expected Hours"><expression>[Date Num] * 8</expression></dataItem><dataItem name="Full Expected Total"><expression>COUNT ( distinct
+
+IF ([SQL4].[PER_TRADE] NOT LIKE '%PT%')
+THEN ([SQL4].[PER_CODE])
+ELSE (NULL)
+
+) * [Expected Hours]</expression></dataItem><dataItem name="PER_CODE"><expression>[SQL4].[PER_CODE]</expression></dataItem><dataItem name="Total Full Hours" aggregate="total"><expression>TOTAL (
+
+IF ([SQL4].[PER_TRADE] NOT LIKE '%PT%')
+THEN ([SQL4].[BOO_HOURS])
+ELSE (NULL)
+
+)</expression></dataItem><dataItem name="Percantage of Hours"><expression>[Total Full Hours]/[Full Expected Total]</expression></dataItem><dataItem name="PER_TERMINATEDDATE"><expression>[SQL4].[PER_TERMINATEDDATE]</expression></dataItem></selection><detailFilters><detailFilter><filterExpression>TRUNC([SQL4].[BOO_DATE]) BETWEEN  trunc(to_date(#prompt('Start Date')#, 'YYYY-MM-DD')) AND trunc(to_date(#prompt('End Date')#, 'YYYY-MM-DD')) OR [SQL4].[BOO_DATE] IS NULL</filterExpression></detailFilter></detailFilters></query><query name="Departments">
+			<source>
+				
+			<sqlQuery name="SQL5" dataSource="AdvRepData">
+			<sqlText>SELECT MRC_CODE "Department", MRC_DESC "Description"
+FROM R5MRCS
+WHERE MRC_ORG = 'PRNS'</sqlText>
+		<mdProjectedItems><mdProjectedItem name="Department"/><mdProjectedItem name="Description"/></mdProjectedItems></sqlQuery></source>
+			<selection><dataItem name="Department"><expression>[SQL5].[Department]</expression></dataItem><dataItem name="Description"><expression>[SQL5].[Description]</expression></dataItem></selection>
+		</query></queries>
+				<layouts>
+					<layout>
+						<reportPages>
+							<page name="Page1"><style><defaultStyles><defaultStyle refStyle="pg"/></defaultStyles></style>
+								<pageBody><style><defaultStyles><defaultStyle refStyle="pb"/></defaultStyles></style>
+									<contents>
+										
+									<table><style><defaultStyles><defaultStyle refStyle="tb"/></defaultStyles><CSS value="border-collapse:collapse;width:100%;text-align:center"/></style><tableRows><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Booked hours by date</staticValue></dataSource><style><CSS value="font-weight:bold;font-size:12pt"/></style></textItem><block>
+			<contents><textItem><dataSource><staticValue>                                                                                            </staticValue></dataSource></textItem></contents>
+		</block><table><style><defaultStyles><defaultStyle refStyle="tb"/></defaultStyles><CSS value="border-collapse:collapse;width:100%"/></style><tableRows><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Expected Hours for a single Full-Time Employee: </staticValue></dataSource><style><CSS value="font-size:11pt"/></style></textItem></contents><style><CSS value="text-align:right;width:60%;padding-top:3px;padding-bottom:3px"/></style></tableCell><tableCell><contents><singleton name="Singleton1" refQuery="Full-Time Hours">
+			<contents><textItem><dataSource><dataItemValue refDataItem="Expected Hours"/></dataSource><style><CSS value="font-size:11pt;font-weight:bold"/></style></textItem></contents>
+		</singleton></contents><style><CSS value="padding-top:3px;padding-bottom:3px"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Total full time hours expected for the District('s): </staticValue></dataSource><style><CSS value="font-size:11pt"/></style></textItem></contents><style><CSS value="text-align:right;width:60%;padding-top:3px;padding-bottom:3px"/></style></tableCell><tableCell><contents><singleton name="Singleton2" refQuery="Full-Time Hours">
+			<contents><textItem><dataSource><dataItemValue refDataItem="Full Expected Total"/></dataSource><style><CSS value="font-size:11pt;font-weight:bold"/></style></textItem></contents>
+		</singleton></contents><style><CSS value="padding-top:3px;padding-bottom:3px"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Total full time hours reported for the District('s):  </staticValue></dataSource></textItem></contents><style><CSS value="font-size:11pt;text-align:right;width:60%;padding-top:3px;padding-bottom:3px"/></style></tableCell><tableCell><contents><singleton refQuery="Full-Time Hours" name="Singleton3">
+			<contents><textItem><dataSource><dataItemValue refDataItem="Total Full Hours"/></dataSource><style><CSS value="font-size:11pt;font-weight:bold"/></style></textItem></contents>
+		</singleton></contents><style><CSS value="padding-top:3px;padding-bottom:3px"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Full time Percentage accomplished: </staticValue></dataSource><style><CSS value="font-size:11pt"/></style></textItem></contents><style><CSS value="text-align:right;width:60%;padding-top:3px;padding-bottom:3px"/></style></tableCell><tableCell><contents><singleton refQuery="Full-Time Hours" name="Singleton4">
+			<contents><textItem><dataSource><dataItemValue refDataItem="Percantage of Hours"/></dataSource><style><dataFormat><percentFormat decimalSize="0"/></dataFormat><CSS value="font-size:11pt;font-weight:bold"/></style></textItem></contents>
+		</singleton></contents><style><CSS value="padding-top:3px;padding-bottom:3px"/></style></tableCell></tableCells></tableRow></tableRows></table></contents><style><CSS value="border:1pt solid black"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>Employees with no Booked hours</staticValue></dataSource><style><CSS value="font-size:12pt;font-weight:bold"/></style></textItem></contents><style><CSS value="width:20%;border:1pt solid black"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><crosstab horizontalPagination="true" name="Crosstab2" refQuery="UDF CrossTab">
+			<crosstabCorner>
+				<contents><textItem><dataSource><dataItemLabel refDataItem="Hours Worked"/></dataSource></textItem></contents>
+				<style>
+					<defaultStyles>
+						<defaultStyle refStyle="xm"/>
+					</defaultStyles>
+				<CSS value="border-top-color:fuchsia;border-left-color:fuchsia;border-bottom:0.25pt solid black;border-right:0.25pt solid black"/></style>
+			</crosstabCorner>
+			
+			
+			<noDataHandler>
+				<contents>
+					<block>
+						<contents>
+							<textItem>
+								<dataSource>
+									<staticValue>No Data Available</staticValue>
+								</dataSource>
+								<style>
+									<CSS value="padding:10px 18px;"/>
+								</style>
+							</textItem>
+						</contents>
+					</block>
+				</contents>
+			</noDataHandler>
+			<style>
+				<CSS value="border-collapse:collapse"/>
+				<defaultStyles>
+					<defaultStyle refStyle="xt"/>
+				</defaultStyles>
+			</style>
+		<defaultMeasure refDataItem="Hours Worked"/><crosstabFactCell><contents><textItem><dataSource><cellValue/></dataSource></textItem></contents><style><defaultStyles><defaultStyle refStyle="mv"/></defaultStyles></style></crosstabFactCell><crosstabColumns><crosstabNode><crosstabNodeMembers><crosstabNodeMember refDataItem="Date" edgeLocation="e3"><style><defaultStyles><defaultStyle refStyle="ml"/></defaultStyles></style><contents><textItem><dataSource><memberCaption/></dataSource></textItem></contents><sortList><sortItem refDataItem="BOO_DATE"/></sortList><conditionalStyleRefs><conditionalStyleRef refConditionalStyle="Conditional Style 1"/></conditionalStyleRefs></crosstabNodeMember></crosstabNodeMembers></crosstabNode><crosstabNode><crosstabNodeMembers><crosstabNodeMember refDataItem="Total(Date)" edgeLocation="e2"><style><defaultStyles><defaultStyle refStyle="ol"/></defaultStyles><CSS value="background-color:black"/></style><contents><textItem><dataSource><dataItemLabel refDataItem="Total(Date)"/></dataSource></textItem></contents><factCell><style><defaultStyles><defaultStyle refStyle="ov"/></defaultStyles></style></factCell></crosstabNodeMember></crosstabNodeMembers></crosstabNode></crosstabColumns><crosstabRows><crosstabNode><crosstabNestedNodes><crosstabNode><crosstabNodeMembers><crosstabNodeMember refDataItem="Person" edgeLocation="e1"><style><defaultStyles><defaultStyle refStyle="ml"/></defaultStyles></style><contents><textItem><dataSource><memberCaption/></dataSource><style><defaultStyles><defaultStyle refStyle="hy"/></defaultStyles></style><reportDrills><reportDrill name="Drill-Through Definition1"><drillLabel><dataSource><staticValue/></dataSource></drillLabel><drillTarget><reportPath path="/content/folder[@name='EAMDEV']/report[@name='Employee Labor Hours (Department wide)']"><XMLAttributes><XMLAttribute name="ReportName" value="Employee Labor Hours (Department wide)" output="no"/><XMLAttribute name="class" value="report" output="no"/></XMLAttributes></reportPath><drillLinks><drillLink><drillTargetContext><parameterContext parameter="START"/></drillTargetContext><drillSourceContext><parameterContext parameter="Start Date"/></drillSourceContext></drillLink><drillLink><drillTargetContext><parameterContext parameter="END"/></drillTargetContext><drillSourceContext><parameterContext parameter="End Date"/></drillSourceContext></drillLink><drillLink><drillTargetContext><parameterContext parameter="PMD"/></drillTargetContext><drillSourceContext><parameterContext parameter="pmd"/></drillSourceContext></drillLink><drillLink><drillTargetContext><parameterContext parameter="DEPT"/></drillTargetContext><drillSourceContext><parameterContext parameter="DEPT"/></drillSourceContext></drillLink><drillLink><drillTargetContext><parameterContext parameter="Person"/></drillTargetContext><drillSourceContext><dataItemContext refDataItem="BOO_PERSON"/></drillSourceContext></drillLink></drillLinks></drillTarget></reportDrill></reportDrills></textItem></contents><sortList><sortItem refDataItem="Person" sortOrder="ascending"/></sortList><conditionalStyleRefs><conditionalStyleRef refConditionalStyle="Part Time"/></conditionalStyleRefs><propertyList><propertyItem refDataItem="PER_TRADE"/></propertyList></crosstabNodeMember></crosstabNodeMembers></crosstabNode></crosstabNestedNodes><crosstabNodeMembers><crosstabNodeMember refDataItem="PER_UDFCHAR01" edgeLocation="e4"><style><defaultStyles><defaultStyle refStyle="ml"/></defaultStyles></style><contents><textItem><dataSource><memberCaption/></dataSource></textItem></contents><sortList><sortItem refDataItem="PER_UDFCHAR01" sortOrder="ascending"/></sortList></crosstabNodeMember></crosstabNodeMembers></crosstabNode></crosstabRows><crosstabIntersections><crosstabIntersection row="e1" column="e3"><conditionalStyleRefs><conditionalStyleRef refConditionalStyle="Test"/></conditionalStyleRefs></crosstabIntersection></crosstabIntersections></crosstab></contents><style><CSS value="padding:10px;text-align:left;border:1pt solid black"/></style></tableCell><tableCell><contents><list horizontalPagination="true" name="List1" refQuery="Lazy List">
+			
+			
+			
+			<noDataHandler>
+				<contents>
+					<block>
+						<contents>
+							<textItem>
+								<dataSource>
+									<staticValue>No Data Available</staticValue>
+								</dataSource>
+								<style>
+									<CSS value="padding:10px 18px;"/>
+								</style>
+							</textItem>
+						</contents>
+					</block>
+				</contents>
+			</noDataHandler>
+			<style>
+				<CSS value="border-collapse:collapse;width:100%;height:100%"/>
+				<defaultStyles>
+					<defaultStyle refStyle="ls"/>
+				</defaultStyles>
+			</style>
+		<listColumns><listColumn><listColumnTitle><style><defaultStyles><defaultStyle refStyle="lt"/></defaultStyles></style><contents><textItem><dataSource><dataItemLabel refDataItem="PER_UDFCHAR01"/></dataSource></textItem></contents></listColumnTitle><listColumnBody><style><defaultStyles><defaultStyle refStyle="lm"/></defaultStyles></style><contents><textItem><dataSource><dataItemValue refDataItem="PER_UDFCHAR01"/></dataSource></textItem></contents><listColumnRowSpan refDataItem="PER_UDFCHAR01"/></listColumnBody></listColumn><listColumn><listColumnTitle><style><defaultStyles><defaultStyle refStyle="lt"/></defaultStyles></style><contents><textItem><dataSource><dataItemLabel refDataItem="Employee"/></dataSource></textItem></contents></listColumnTitle><listColumnBody><style><defaultStyles><defaultStyle refStyle="lm"/></defaultStyles><CSS value="text-align:center"/></style><contents><textItem><dataSource><dataItemValue refDataItem="Employee"/></dataSource></textItem></contents><conditionalStyleRefs><conditionalStyleRef refConditionalStyle="Part Time 2"/></conditionalStyleRefs></listColumnBody></listColumn><listColumn><listColumnTitle><style><defaultStyles><defaultStyle refStyle="lt"/></defaultStyles><CSS value="display:none"/></style><contents><textItem><dataSource><dataItemLabel refDataItem="PER_TRADE"/></dataSource></textItem></contents></listColumnTitle><listColumnBody><style><defaultStyles><defaultStyle refStyle="lm"/></defaultStyles><CSS value="display:none"/></style><contents><textItem><dataSource><dataItemValue refDataItem="PER_TRADE"/></dataSource></textItem></contents></listColumnBody></listColumn></listColumns><sortList><sortItem refDataItem="Employee" sortOrder="ascending"/></sortList><listGroups><listGroup refDataItem="PER_UDFCHAR01"><sortList><sortItem refDataItem="PER_UDFCHAR01" sortOrder="ascending"/></sortList></listGroup></listGroups></list></contents><style><CSS value="padding:10px;text-align:left;width:20%;border:1pt solid black"/></style></tableCell></tableCells></tableRow></tableRows></table><table><style><defaultStyles><defaultStyle refStyle="tb"/></defaultStyles><CSS value="border-collapse:collapse;width:100%"/></style><tableRows><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>KEY</staticValue></dataSource><style><CSS value="font-size:16pt;font-weight:bold"/></style></textItem></contents><style><CSS value="width:4%;border:1pt solid silver"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>  Acceptable Range: 7.5 - 8.5 Hours</staticValue></dataSource><style><CSS value="font-size:12pt"/></style></textItem></contents><style><CSS value="width:50%;border:1pt solid silver"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Green: </staticValue></dataSource><style><CSS value="color:#00CC00"/></style></textItem></contents><style><CSS value="width:4%;border:1pt solid silver"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>  Hours are within the Acceptable Range</staticValue></dataSource></textItem></contents><style><CSS value="width:50%;border:1pt solid silver"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Orange: </staticValue></dataSource><style><CSS value="color:#FF9900"/></style></textItem></contents><style><CSS value="width:4%;border:1pt solid silver"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>  Hours either exceed or are slightly below Acceptable Range</staticValue></dataSource></textItem></contents><style><CSS value="width:50%;border:1pt solid silver"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Red: </staticValue></dataSource><style><CSS value="color:maroon"/></style></textItem></contents><style><CSS value="width:4%;border:1pt solid silver"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>  Hours are signifigantly below the Acceptable Range</staticValue></dataSource></textItem></contents><style><CSS value="width:50%;border:1pt solid silver"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents/><style><CSS value="background-color:maroon;width:4%;border:1pt solid silver"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>  No hours Entered</staticValue></dataSource></textItem></contents><style><CSS value="width:50%;border:1pt solid silver"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Employee Name</staticValue></dataSource></textItem></contents><style><CSS value="background-color:rgb(255,255,200);width:4%;border:1pt solid silver"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>Part-Time Employee</staticValue></dataSource></textItem></contents><style><CSS value="width:50%;border:1pt solid silver"/></style></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Employee Name</staticValue></dataSource></textItem></contents><style><CSS value="background-color:rgb(180,200,255);width:4%;border:1pt solid silver"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>Supervisor/Senior Maintenance</staticValue></dataSource></textItem></contents><style><CSS value="width:50%;border:1pt solid silver"/></style></tableCell></tableCells></tableRow></tableRows></table></contents>
+								</pageBody>
+								<pageHeader>
+									<contents>
+										<block><style><defaultStyles><defaultStyle refStyle="ta"/></defaultStyles><CSS value="text-align:center"/></style>
+											<contents>
+												<textItem><style><defaultStyles><defaultStyle refStyle="tt"/></defaultStyles><CSS value="text-decoration:underline;font-weight:bold;font-size:16pt;color:maroon"/></style>
+													<dataSource>
+														<staticValue>Booked Hours For  </staticValue>
+													</dataSource>
+												</textItem>
+											<textItem><dataSource><reportExpression>(ParamDisplayValue('pmd'))
+</reportExpression></dataSource><style><CSS value="font-size:16pt;font-weight:bold;text-decoration:underline;color:maroon"/></style></textItem></contents>
+										</block>
+									<table><style><defaultStyles><defaultStyle refStyle="tb"/></defaultStyles><CSS value="border-collapse:collapse;width:100%"/></style><tableRows><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>From: </staticValue></dataSource></textItem><textItem><dataSource><reportExpression>ParamDisplayValue('Start Date')</reportExpression></dataSource></textItem></contents><style><CSS value="width:50%;text-align:right;font-size:12pt;font-weight:bold;border-top:1pt solid black;border-bottom:1pt solid black"/></style></tableCell><tableCell><contents><textItem><dataSource><staticValue>    To: </staticValue></dataSource></textItem><textItem><dataSource><reportExpression>ParamDisplayValue('End Date')</reportExpression></dataSource></textItem></contents><style><CSS value="width:50%;text-align:left;font-weight:bold;font-size:12pt;border-top:1pt solid black;border-bottom:1pt solid black"/></style></tableCell></tableCells></tableRow></tableRows></table><table><style><defaultStyles><defaultStyle refStyle="tb"/></defaultStyles><CSS value="border-collapse:collapse;width:100%"/></style><tableRows><tableRow><tableCells><tableCell><contents/></tableCell><tableCell><contents/></tableCell><tableCell><contents/></tableCell><tableCell><contents/></tableCell><tableCell><contents/></tableCell></tableCells></tableRow></tableRows></table></contents>
+									<style>
+										<defaultStyles>
+											<defaultStyle refStyle="ph"/>
+										</defaultStyles>
+										<CSS value="padding-bottom:10px"/>
+									</style>
+								</pageHeader>
+								<pageFooter>
+									<contents>
+										<table>
+											<tableRows>
+												<tableRow>
+													<tableCells>
+														<tableCell>
+															<contents>
+																<date>
+																	<style>
+																		<dataFormat>
+																			<dateFormat/>
+																		</dataFormat>
+																	</style>
+																</date>
+															</contents>
+															<style>
+																<CSS value="vertical-align:top;text-align:left;width:25%"/>
+															</style>
+														</tableCell>
+														<tableCell>
+															<contents>
+																<pageNumber/>
+															</contents>
+															<style>
+																<CSS value="vertical-align:top;text-align:center;width:50%"/>
+															</style>
+														</tableCell>
+														<tableCell>
+															<contents>
+																<time>
+																	<style>
+																		<dataFormat>
+																			<timeFormat/>
+																		</dataFormat>
+																	</style>
+																</time>
+															</contents>
+															<style>
+																<CSS value="vertical-align:top;text-align:right;width:25%"/>
+															</style>
+														</tableCell>
+													</tableCells>
+												</tableRow>
+											</tableRows>
+											<style>
+												<defaultStyles>
+													<defaultStyle refStyle="tb"/>
+												</defaultStyles>
+												<CSS value="border-collapse:collapse;width:100%"/>
+											</style>
+										</table>
+									</contents>
+									<style>
+										<defaultStyles>
+											<defaultStyle refStyle="pf"/>
+										</defaultStyles>
+										<CSS value="padding-top:10px"/>
+									</style>
+								</pageFooter>
+							<pageSetup orientation="landscape"/></page>
+						</reportPages>
+					<promptPages><page name="Prompt Page2">
+			<pageHeader>
+				<contents>
+					<block>
+						<contents>
+							<textItem>
+								<dataSource>
+									<staticValue/>
+								</dataSource>
+								<style>
+									<defaultStyles>
+										<defaultStyle refStyle="tt"/>
+									</defaultStyles>
+								</style>
+							</textItem>
+						</contents>
+						<style>
+							<defaultStyles>
+								<defaultStyle refStyle="ta"/>
+							</defaultStyles>
+						</style>
+					</block>
+				</contents>
+				<style>
+					<defaultStyles>
+						<defaultStyle refStyle="hp"/>
+					</defaultStyles>
+				</style>
+			</pageHeader>
+			<pageBody>
+				<contents><table><style><defaultStyles><defaultStyle refStyle="tb"/></defaultStyles><CSS value="border-collapse:collapse;width:100%"/></style><tableRows><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Dept.:</staticValue></dataSource><style><CSS value="font-weight:bold"/></style></textItem></contents></tableCell><tableCell><contents><selectValue refQuery="Departments" parameter="DEPT" autoSubmit="true"><useItem refDataItem="Department"><displayItem refDataItem="Department"/></useItem><selectOptions><selectOption useValue="*"><displayValue>All Departments</displayValue></selectOption></selectOptions></selectValue></contents></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>PMD: </staticValue></dataSource><style><CSS value="font-weight:bold"/></style></textItem></contents><style><CSS value="width:30px;text-align:left"/></style></tableCell><tableCell><contents><selectValue parameter="pmd" multiSelect="true" range="false" required="true" refQuery="PMD LOV" selectValueUI="checkboxGroup" cascadeOn="DEPT"><useItem refDataItem="OBJ_CODE"/><defaultSelections><defaultSimpleSelection>None</defaultSimpleSelection></defaultSelections><sortList><sortItem refDataItem="OBJ_CODE"/></sortList></selectValue></contents></tableCell></tableCells></tableRow></tableRows></table><table><style><defaultStyles><defaultStyle refStyle="tb"/></defaultStyles><CSS value="border-collapse:collapse;width:100%"/></style><tableRows><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>Start: </staticValue></dataSource><style><CSS value="font-weight:bold"/></style></textItem></contents><style><CSS value="width:30px;text-align:left"/></style></tableCell><tableCell><contents><selectDate parameter="Start Date" multiSelect="false" range="false" required="true" selectDateUI="editBox"/></contents></tableCell></tableCells></tableRow><tableRow><tableCells><tableCell><contents><textItem><dataSource><staticValue>End: </staticValue></dataSource><style><CSS value="font-weight:bold"/></style></textItem></contents><style><CSS value="width:30px;text-align:left"/></style></tableCell><tableCell><contents><selectDate parameter="End Date" multiSelect="false" range="false" required="true" selectDateUI="editBox"/></contents></tableCell></tableCells></tableRow></tableRows></table></contents>
+				<style>
+					<defaultStyles>
+						<defaultStyle refStyle="py"/>
+					</defaultStyles>
+				</style>
+			</pageBody>
+			<pageFooter>
+				<contents>
+					<promptButton type="cancel">
+						<contents/>
+						<style>
+							<defaultStyles>
+								<defaultStyle refStyle="bp"/>
+							</defaultStyles>
+						</style>
+					</promptButton>
+					<promptButton type="back">
+						<contents/>
+						<style>
+							<defaultStyles>
+								<defaultStyle refStyle="bp"/>
+							</defaultStyles>
+						</style>
+					</promptButton>
+					<promptButton type="next">
+						<contents/>
+						<style>
+							<defaultStyles>
+								<defaultStyle refStyle="bp"/>
+							</defaultStyles>
+						</style>
+					</promptButton>
+					<promptButton type="finish">
+						<contents/>
+						<style>
+							<defaultStyles>
+								<defaultStyle refStyle="bp"/>
+							</defaultStyles>
+						</style>
+					</promptButton>
+				</contents>
+				<style>
+					<defaultStyles>
+						<defaultStyle refStyle="fp"/>
+					</defaultStyles>
+				</style>
+			</pageFooter>
+			<style>
+				<defaultStyles>
+					<defaultStyle refStyle="pp"/>
+				</defaultStyles>
+			</style>
+		</page></promptPages></layout>
+				</layouts>
+			<XMLAttributes><XMLAttribute name="RS_CreateExtendedDataItems" value="true" output="no"/><XMLAttribute name="listSeparator" value="," output="no"/><XMLAttribute name="RS_modelModificationTime" value="2013-10-01T03:51:41.430Z" output="no"/></XMLAttributes><reportName>Booked Hours by PMD (Department wide)</reportName><namedConditionalStyles><advancedConditionalStyle name="Test"><styleCases><styleCase><style><CSS value="color:#FF9900"/></style><reportCondition>[UDF CrossTab].[Hours Worked] &gt; 8.5 OR ([UDF CrossTab].[Hours Worked] &lt; 7.5 AND [UDF CrossTab].[Hours Worked] &gt;= 7)</reportCondition></styleCase><styleCase><style><defaultStyles><defaultStyle refStyle="pd_5"/></defaultStyles></style><reportCondition>[UDF CrossTab].[Hours Worked] is null</reportCondition></styleCase><styleCase><style><defaultStyles><defaultStyle refStyle="pd_2"/></defaultStyles></style><reportCondition> 7.5 &lt;= [UDF CrossTab].[Hours Worked] AND  8.5 &gt;= [UDF CrossTab].[Hours Worked] </reportCondition></styleCase></styleCases><styleDefault><style><defaultStyles><defaultStyle refStyle="pd_4"/></defaultStyles></style></styleDefault></advancedConditionalStyle><advancedConditionalStyle name="Conditional Style 1"><styleCases><styleCase><reportCondition>[UDF CrossTab].[Hours Worked] = [UDF CrossTab].[Hours Worked]</reportCondition></styleCase></styleCases><styleDefault/></advancedConditionalStyle><advancedConditionalStyle name="Part Time"><styleCases><styleCase><style><CSS value="background-color:rgb(180,200,255)"/></style><reportCondition>[UDF CrossTab].[PER_TRADE] = 'MNTSUP'
+OR
+[UDF CrossTab].[PER_TRADE] = 'PKFACSUP'
+OR
+[UDF CrossTab].[PER_TRADE] = 'SRMNTWRKR'</reportCondition></styleCase><styleCase><style><CSS value="background-color:rgb(255,255,200)"/></style><reportCondition>[UDF CrossTab].[PER_TRADE] LIKE '%PT%'</reportCondition></styleCase></styleCases><styleDefault/></advancedConditionalStyle><advancedConditionalStyle name="Part Time 2"><styleCases><styleCase><style><CSS value="background-color:rgb(180,200,255)"/></style><reportCondition>[Lazy List].[PER_TRADE] = 'MNTSUP'
+OR
+[Lazy List].[PER_TRADE] = 'PKFACSUP'
+OR
+[Lazy List].[PER_TRADE] = 'SRMNTWRKR'</reportCondition></styleCase><styleCase><style><CSS value="background-color:rgb(255,255,200)"/></style><reportCondition>[Lazy List].[PER_TRADE] LIKE '%PT%'</reportCondition></styleCase></styleCases><styleDefault/></advancedConditionalStyle></namedConditionalStyles><reportVariables><reportVariable type="boolean" name="Boolean1">
+			<reportExpression>ParamDisplayValue('DEPT') in ('PK-MAINT', '*')
+</reportExpression>
+			<variableValues>
+				<variableValue value="1"/>
+			</variableValues>
+		</reportVariable></reportVariables></report>
